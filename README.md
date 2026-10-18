@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # HomeGuard
 
 HomeGuard is a smart home security visibility workspace for reviewing household device inventory, security findings, activity, and network organization. It includes a dark public landing page, a local dashboard, and a persistent JSON REST API.
@@ -47,3 +48,6 @@ curl http://localhost:3000/api/v1/devices
 ## Data and security notes
 
 The Prisma schema models organizations, memberships, properties, devices, findings, events, integrations, scans, and audit records for a future PostgreSQL deployment. Current REST data uses a local JSON file and does not yet use Prisma. Authentication, account recovery, server-enforced household roles, mail delivery, billing, and a monitoring agent require their respective providers. Findings describe observations only; unknown identity does not establish malicious activity, and unavailable firmware or traffic data is not inferred.
+=======
+# HomeGuard
+>>>>>>> 1b2bbfc55a40f75abdffad8053f5a3fc3a778ed7
