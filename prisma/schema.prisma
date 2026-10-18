@@ -1,0 +1,274 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+enum Role {
+  OWNER
+  ADMINISTRATOR
+  VIEWER
+}
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  UNKNOWN
+}
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFORMATIONAL
+}
+enum FindingStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  ACCEPTED_RISK
+}
+enum RecommendationStatus {
+  NEW
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  email String @unique
+  name String?
+  passwordHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  memberships Membership[]
+  sessions Session[]
+  accounts Account[]
+  notifications Notification[]
+  auditLogs AuditLog[]
+}
+model Session {
+  id String @id @default(uuid()) @db.Uuid
+  sessionToken String @unique
+  expires DateTime
+  userId String @db.Uuid
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+}
+model Account {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  type String
+  provider String
+  providerAccountId String
+  refresh_token String? @db.Text
+  access_token String? @db.Text
+  expires_at Int?
+  token_type String?
+  scope String?
+  id_token String? @db.Text
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@unique([provider, providerAccountId])
+}
+model Organization {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  createdAt DateTime @default(now())
+  memberships Membership[]
+  properties Property[]
+}
+model Membership {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  userId String @db.Uuid
+  role Role @default(VIEWER)
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete:Cascade)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@unique([organizationId,userId])
+  @@index([userId])
+}
+model Property {
+  id String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  name String
+  locationLabel String?
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete:Cascade)
+  networks Network[]
+  findings SecurityFinding[]
+  events SecurityEvent[]
+  recommendations Recommendation[]
+  notifications Notification[]
+  scans ScanJob[]
+  integrations Integration[]
+  reports Report[]
+  @@index([organizationId,archivedAt])
+}
+model Network {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  name String
+  cidr String?
+  gatewayDeviceId String? @db.Uuid
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  devices Device[]
+  agents MonitoringAgent[]
+  @@index([propertyId])
+}
+model MonitoringAgent {
+  id String @id @default(uuid()) @db.Uuid
+  networkId String @db.Uuid
+  name String
+  status String @default("disconnected")
+  lastSeenAt DateTime?
+  credentialHash String?
+  capabilities Json?
+  createdAt DateTime @default(now())
+  network Network @relation(fields:[networkId], references:[id], onDelete:Cascade)
+  @@index([networkId,status])
+}
+model Device {
+  id String @id @default(uuid()) @db.Uuid
+  networkId String @db.Uuid
+  name String
+  category String @default("unknown")
+  ipAddress String?
+  macAddress String?
+  vendor String?
+  model String?
+  status DeviceStatus @default(UNKNOWN)
+  riskLevel Severity @default(INFORMATIONAL)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt DateTime?
+  notes String? @db.Text
+  labels String[] @default([])
+  archivedAt DateTime?
+  network Network @relation(fields:[networkId], references:[id], onDelete:Cascade)
+  observations DeviceObservation[]
+  findings SecurityFinding[]
+  events SecurityEvent[]
+  @@unique([networkId,macAddress])
+  @@index([networkId,status,lastSeenAt])
+  @@index([networkId,category,riskLevel])
+}
+model DeviceObservation {
+  id String @id @default(uuid()) @db.Uuid
+  deviceId String @db.Uuid
+  observedAt DateTime @default(now())
+  source String
+  metadata Json
+  device Device @relation(fields:[deviceId], references:[id], onDelete:Cascade)
+  @@index([deviceId,observedAt])
+}
+model SecurityFinding {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  deviceId String? @db.Uuid
+  title String
+  category String
+  severity Severity
+  evidence String @db.Text
+  confidence String @default("unverified")
+  impact String? @db.Text
+  remediation String @db.Text
+  status FindingStatus @default(OPEN)
+  detectedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  device Device? @relation(fields:[deviceId], references:[id], onDelete:SetNull)
+  @@index([propertyId,status,severity,detectedAt])
+  @@index([deviceId])
+}
+model SecurityEvent {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  deviceId String? @db.Uuid
+  type String
+  title String
+  severity Severity @default(INFORMATIONAL)
+  source String
+  description String @db.Text
+  metadata Json?
+  occurredAt DateTime @default(now())
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  device Device? @relation(fields:[deviceId], references:[id], onDelete:SetNull)
+  @@index([propertyId,occurredAt])
+  @@index([propertyId,type,severity])
+}
+model Recommendation {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  title String
+  explanation String @db.Text
+  reason String @db.Text
+  priority Severity
+  actionSteps String @db.Text
+  documentationUrl String?
+  status RecommendationStatus @default(NEW)
+  updatedAt DateTime @updatedAt
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  @@index([propertyId,status,priority])
+}
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  userId String @db.Uuid
+  title String
+  message String @db.Text
+  type String
+  severity Severity
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@index([userId,readAt,createdAt])
+}
+model ScanJob {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  status String @default("queued")
+  source String
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  summary Json?
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  @@index([propertyId,startedAt])
+}
+model Integration {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  provider String
+  status String @default("disconnected")
+  encryptedConfig String?
+  lastSyncAt DateTime?
+  capabilities Json?
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  @@unique([propertyId,provider])
+}
+model Report {
+  id String @id @default(uuid()) @db.Uuid
+  propertyId String @db.Uuid
+  status String @default("queued")
+  format String
+  rangeStart DateTime
+  rangeEnd DateTime
+  storageKey String?
+  createdAt DateTime @default(now())
+  property Property @relation(fields:[propertyId], references:[id], onDelete:Cascade)
+  @@index([propertyId,createdAt])
+}
+model AuditLog {
+  id String @id @default(uuid()) @db.Uuid
+  userId String? @db.Uuid
+  organizationId String @db.Uuid
+  action String
+  resourceType String
+  resourceId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  user User? @relation(fields:[userId], references:[id], onDelete:SetNull)
+  @@index([organizationId,createdAt])
+}
